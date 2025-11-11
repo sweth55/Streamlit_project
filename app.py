@@ -1,43 +1,30 @@
 import streamlit as st
 import pandas as pd
 import pdfplumber
-import google.generativeai as genai
+from openai import AzureOpenAI
 
 # --- App Title ---
-st.title("📄 Editable PDF Tables Viewer + AI Q&A (Gemini-powered)")
+st.title("📄 Editable PDF Tables Viewer + AI Q&A (Azure OpenAI-powered)")
 
-# --- Initialize Google Gemini client ---
+# --- Initialize Azure OpenAI client ---
 try:
-    if "GOOGLE_API_KEY" in st.secrets:
-        api_key = st.secrets["GOOGLE_API_KEY"]
-    else:
-        api_key = st.text_input("🔑 Enter your Google API key:", type="password")
+    # Use hardcoded credentials (you can also use environment variables or secrets)
+    api_key = "fbdde79196c14b9d842a8830eb8ba4c4"
+    azure_endpoint = "https://qbot-ai-openai-dev.openai.azure.com/"
+    deployment_name = "qBotopenaigpt4o"
+    api_version = "2023-05-15"
 
-    if not api_key:
-        st.warning("Please enter your Google API key to continue.")
-        st.stop()
+    # Initialize Azure OpenAI client
+    client = AzureOpenAI(
+        api_key=api_key,
+        api_version=api_version,
+        azure_endpoint=azure_endpoint
+    )
 
-    genai.configure(api_key=api_key)
-
-    # Use the correct model names from the available models list
-    try:
-        model = genai.GenerativeModel("models/gemini-2.5-flash")
-        st.info("ℹ️ Using Gemini 2.5 Flash model")
-    except:
-        try:
-            model = genai.GenerativeModel("models/gemini-2.0-flash")
-            st.info("ℹ️ Using Gemini 2.0 Flash model")
-        except:
-            try:
-                model = genai.GenerativeModel("models/gemini-pro-latest")
-                st.info("ℹ️ Using Gemini Pro Latest model")
-            except Exception as model_error:
-                st.error(f"Could not initialize any Gemini model: {model_error}")
-                st.info("💡 Try listing available models with: genai.list_models()")
-                st.stop()
+    st.success(f"✅ Connected to Azure OpenAI (Deployment: {deployment_name})")
 
 except Exception as e:
-    st.error(f"❌ Error initializing Gemini client: {e}")
+    st.error(f"❌ Error initializing Azure OpenAI client: {e}")
     st.stop()
 
 # --- File Upload ---
@@ -141,30 +128,22 @@ Please answer the following question based on the above content.
 """
 
             try:
-                prompt = f"{context}\n\nQuestion: {user_query}\n\nAnswer:"
+                messages = [
+                    {"role": "system",
+                     "content": "You are a helpful assistant that analyzes PDF documents and answers questions based on their content."},
+                    {"role": "user", "content": f"{context}\n\nQuestion: {user_query}"}
+                ]
 
-                response = model.generate_content(
-                    prompt,
-                    generation_config=genai.types.GenerationConfig(
-                        temperature=0.7,
-                        max_output_tokens=1024,
-                    )
+                response = client.chat.completions.create(
+                    model=deployment_name,
+                    messages=messages,
+                    temperature=0.7,
+                    max_tokens=1024
                 )
 
                 st.markdown("### 🧠 Answer:")
-                st.write(response.text)
+                st.write(response.choices[0].message.content)
 
             except Exception as e:
-                st.error(f"⚠️ Gemini API error: {e}")
-                st.info("💡 Tip: Make sure your API key is valid and you haven't exceeded rate limits.")
-
-                # Show available models for debugging
-                try:
-                    st.info("Attempting to list available models...")
-                    available_models = genai.list_models()
-                    st.write("Available models:")
-                    for m in available_models:
-                        if 'generateContent' in m.supported_generation_methods:
-                            st.write(f"- {m.name}")
-                except:
-                    pass
+                st.error(f"⚠️ Azure OpenAI API error: {e}")
+                st.info("💡 Tip: Make sure your API key, endpoint, and deployment name are correct.")
